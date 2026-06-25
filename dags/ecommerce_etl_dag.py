@@ -3,19 +3,19 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 import sys
 
-# Make project code importable inside the container
 sys.path.append("/opt/airflow")
 
 from scripts.setup_database import run_sql_file
 from scripts.ingest_customers import ingest_customers
 from scripts.ingest_products import ingest_products
 from scripts.ingest_orders import ingest_orders
+from scripts.data_quality_checks import run_data_quality_checks
 from scripts.load_warehouse import load_warehouse_and_analytics
 
 default_args = {
     "owner": "manish",
     "depends_on_past": False,
-    "retries": 0,   # keep this 0 while debugging
+    "retries": 0,
 }
 
 def setup_db_task():
@@ -51,9 +51,14 @@ with DAG(
         python_callable=ingest_orders
     )
 
+    data_quality_checks_task = PythonOperator(
+        task_id="run_data_quality_checks",
+        python_callable=run_data_quality_checks
+    )
+
     load_warehouse_task = PythonOperator(
         task_id="load_warehouse",
         python_callable=load_warehouse_and_analytics
     )
 
-    setup_database >> [ingest_customers_task, ingest_products_task, ingest_orders_task] >> load_warehouse_task
+    setup_database >> [ingest_customers_task, ingest_products_task, ingest_orders_task] >> data_quality_checks_task >> load_warehouse_task
